@@ -1,8 +1,9 @@
-package mobileprogramming.testassignment.utils;
+package mobileprogramming.testassignment.event;
 
-import android.app.Application;
-
-public class TestApplication extends Application {
+/**
+ * Model for Network Change
+ */
+public class NetworkChangeEvent {
     private String networkName;
     private String networkType;
 

@@ -28,6 +28,19 @@
             android:text="@string/instruction"
             android:textColor="@android:color/white" />
 
+        <TextView
+            android:id="@+id/tv_event"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_margin="6dp"
+            android:background="@color/colorPrimaryDark"
+            android:gravity="center"
+            android:paddingEnd="6dp"
+            android:paddingStart="6dp"
+            android:text="@string/event_detail"
+            android:textColor="@android:color/white" />
+
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
