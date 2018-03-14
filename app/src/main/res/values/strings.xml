@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">TestAssignment</string>
+    <string name="lat">Lat:</string>
+    <string name="longitude">Long:</string>
+    <string name="clear_geofence">Clear Geofence</string>
+    <string name="create_geofence">Create Geofence</string>
+    <string name="instruction">Tap on map to set geofence location and click create geofence button</string>
+    <string name="location_services_info">Please turn on Location services</string>
+</resources>
