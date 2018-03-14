@@ -1,14 +1,7 @@
 package mobileprogramming.testassignment.service;
 
 import android.app.IntentService;
-import android.app.Notification;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
-import android.support.v4.app.NotificationCompat;
-import android.support.v4.app.TaskStackBuilder;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -16,11 +9,12 @@ import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofenceStatusCodes;
 import com.google.android.gms.location.GeofencingEvent;
 
+import org.greenrobot.eventbus.EventBus;
+
 import java.util.ArrayList;
 import java.util.List;
 
-import mobileprogramming.testassignment.R;
-import mobileprogramming.testassignment.activity.LandingActivity;
+import mobileprogramming.testassignment.event.GeoFenceEvent;
 
 public class GeofenceTransitionService extends IntentService {
 
@@ -77,46 +71,16 @@ public class GeofenceTransitionService extends IntentService {
 
         String status = null;
         if (geoFenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER)
-            status = "Entering ";
+            status = "Enter event for ";
         else if (geoFenceTransition == Geofence.GEOFENCE_TRANSITION_EXIT)
-            status = "Exiting ";
+            status = "Exit event for ";
         return status + TextUtils.join(", ", triggeringGeofencesList);
     }
 
-    private void sendNotification(final String msg) {
-        Log.i(TAG, "sendNotification: " + msg);
-
-        // Intent to start the main Activity
-        Intent notificationIntent = LandingActivity.makeNotificationIntent(
-                getApplicationContext(), msg
-        );
-
-        TaskStackBuilder stackBuilder = TaskStackBuilder.create(this);
-        stackBuilder.addParentStack(LandingActivity.class);
-        stackBuilder.addNextIntent(notificationIntent);
-        PendingIntent notificationPendingIntent = stackBuilder.getPendingIntent(0, PendingIntent.FLAG_UPDATE_CURRENT);
-
-
-        // Creating and sending Notification
-        NotificationManager notificatioMng =
-                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        notificatioMng.notify(
-                GEOFENCE_NOTIFICATION_ID,
-                createNotification(msg, notificationPendingIntent));
-
-    }
-
-    // Create notification
-    private Notification createNotification(String msg, PendingIntent notificationPendingIntent) {
-        NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this);
-        notificationBuilder
-                .setSmallIcon(R.drawable.common_google_signin_btn_icon_dark)
-                .setColor(Color.RED)
-                .setContentTitle(msg)
-                .setContentText("Geofence Notification!")
-                .setContentIntent(notificationPendingIntent)
-                .setDefaults(Notification.DEFAULT_LIGHTS | Notification.DEFAULT_VIBRATE | Notification.DEFAULT_SOUND)
-                .setAutoCancel(true);
-        return notificationBuilder.build();
+    private void sendNotification(final String event) {
+        Log.i(TAG, "sendNotification: " + event);
+        GeoFenceEvent geoFenceEvent = new GeoFenceEvent();
+        geoFenceEvent.setEventName(event);
+        EventBus.getDefault().post(geoFenceEvent);
     }
 }

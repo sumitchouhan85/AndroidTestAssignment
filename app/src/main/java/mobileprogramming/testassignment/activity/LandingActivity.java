@@ -10,12 +10,12 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
 import android.location.LocationManager;
+import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.os.Looper;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v4.app.ActivityCompat;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -46,12 +46,23 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
+import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
+
 import mobileprogramming.testassignment.R;
+import mobileprogramming.testassignment.event.GeoFenceEvent;
+import mobileprogramming.testassignment.event.NetworkChangeEvent;
 import mobileprogramming.testassignment.service.GeofenceTransitionService;
 import mobileprogramming.testassignment.utils.Constant;
+import mobileprogramming.testassignment.utils.TestApplication;
+import mobileprogramming.testassignment.utils.UtilityMethods;
 
 import static com.google.android.gms.location.LocationServices.getFusedLocationProviderClient;
 
+/**
+ * Landing Activity for map and config controls
+ */
 public class LandingActivity extends Activity implements
         View.OnClickListener,
         OnMapReadyCallback,
@@ -62,27 +73,14 @@ public class LandingActivity extends Activity implements
         ResultCallback<Status> {
 
     private static final String TAG = LandingActivity.class.getSimpleName();
-
     private static final String[] permissionsList = new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION};
 
-    private static final String NOTIFICATION_MSG = "NOTIFICATION MSG";
-    private final int REQ_PERMISSION = 999;
-    private final String KEY_GEOFENCE_LAT = "GEOFENCE LATITUDE";
-    private final String KEY_GEOFENCE_LON = "GEOFENCE LONGITUDE";
-    private TextView tvLat, tvLong;
+    private TextView tvLat, tvEvent, tvLong;
     private GoogleMap map;
+    private GoogleApiClient googleApiClient;
     private Marker geoFenceMarker;
     private Marker locationMarker;
-    private GoogleApiClient googleApiClient;
     private Circle geoFenceLimits;
-    private PendingIntent geoFencePendingIntent;
-
-    // Create a Intent send by the notification
-    public static Intent makeNotificationIntent(Context context, String msg) {
-        Intent intent = new Intent(context, LandingActivity.class);
-        intent.putExtra(NOTIFICATION_MSG, msg);
-        return intent;
-    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,9 +92,60 @@ public class LandingActivity extends Activity implements
 
         //initialize google maps
         initGoogleMaps();
+
+        //set network preference for initial network info
+        UtilityMethods.setNetworkPrefrence(this);
     }
 
-    // Create GoogleApiClient instance
+    /**
+     * Event subscriber for Geofence enter/exit event
+     *
+     * @param event Enter/Exit
+     */
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onMessageEvent(final GeoFenceEvent event) {
+        String eventName = event.getEventName();
+        Log.i(TAG, "onMessageEvent: " + eventName);
+        tvEvent.setText(eventName);
+        if (eventName.contains("Enter")) {
+            tvEvent.setBackgroundColor(Color.GREEN);
+        } else {
+            if (!checkForNetworkSwitch()) {
+                tvEvent.setBackgroundColor(Color.RED);
+                UtilityMethods.setNetworkPrefrence(this);
+            } else {
+                tvEvent.setText(R.string.exit_event_with_same_network);
+            }
+        }
+    }
+
+    /**
+     * Used to check network switch with initial and current network info
+     *
+     * @return true if same else false
+     */
+    private boolean checkForNetworkSwitch() {
+        NetworkInfo networkInfo = UtilityMethods.getNetworkInfo(this);
+        TestApplication testApplication = (TestApplication) getApplication();
+        return networkInfo.getExtraInfo().equalsIgnoreCase(testApplication.getNetworkName()) && networkInfo.getTypeName().equalsIgnoreCase(testApplication.getNetworkType());
+    }
+
+    /**
+     * Event subscriber for Network switch event
+     *
+     * @param event NetworkChangeEvent
+     */
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onMessageEvent(final NetworkChangeEvent event) {
+        if (event != null && tvEvent.getText().toString().contains("Exit")) {
+            tvEvent.setBackgroundColor(Color.RED);
+            UtilityMethods.setNetworkPrefrence(LandingActivity.this);
+        }
+    }
+
+    /**
+     * Create GoogleApiClient instance
+     */
     private void createGoogleApi() {
         Log.d(TAG, "createGoogleApi()");
         if (googleApiClient == null) {
@@ -108,15 +157,19 @@ public class LandingActivity extends Activity implements
         }
     }
 
-    // Initialize GoogleMaps
+    /**
+     * Initialize GoogleMaps
+     */
     private void initGoogleMaps() {
         MapFragment mapFragment = (MapFragment) getFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
     }
 
-    // Trigger new location updates at interval
+    /**
+     * Trigger new location updates at interval
+     */
     protected void startLocationUpdates() {
-        if (!checkLocationPermission()) {
+        if (!UtilityMethods.checkLocationPermission(this)) {
             // Create the location request to start receiving updates
             LocationRequest mLocationRequest = new LocationRequest();
             mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
@@ -129,7 +182,6 @@ public class LandingActivity extends Activity implements
             LocationSettingsRequest locationSettingsRequest = builder.build();
 
             // Check whether location settings are satisfied
-            // https://developers.google.com/android/reference/com/google/android/gms/location/SettingsClient
             SettingsClient settingsClient = LocationServices.getSettingsClient(this);
             settingsClient.checkLocationSettings(locationSettingsRequest);
 
@@ -137,30 +189,19 @@ public class LandingActivity extends Activity implements
             getFusedLocationProviderClient(this).requestLocationUpdates(mLocationRequest, new LocationCallback() {
                         @Override
                         public void onLocationResult(LocationResult locationResult) {
-                            // do work here
                             onLocationChanged(locationResult.getLastLocation());
                         }
                     },
                     Looper.myLooper());
         } else {
-            requestPermissions(permissionsList);
+            UtilityMethods.requestPermissions(LandingActivity.this, permissionsList);
         }
-    }
-
-    private boolean checkLocationPermission() {
-        return ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED;
-    }
-
-    private void requestPermissions(String[] permission) {
-        ActivityCompat.requestPermissions(this,
-                permission,
-                REQ_PERMISSION);
     }
 
     @Override
     protected void onStart() {
         super.onStart();
+        EventBus.getDefault().register(this);
         //check for GPS settings
         checkForGPS();
         // Call GoogleApiClient connection when starting the Activity
@@ -172,6 +213,7 @@ public class LandingActivity extends Activity implements
     @Override
     protected void onStop() {
         super.onStop();
+        EventBus.getDefault().unregister(this);
         // Disconnect GoogleApiClient when stopping Activity
         if (googleApiClient != null) {
             googleApiClient.disconnect();
@@ -184,42 +226,44 @@ public class LandingActivity extends Activity implements
         Log.d(TAG, "onRequestPermissionsResult()");
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         switch (requestCode) {
-            case REQ_PERMISSION: {
+            case 999: {
                 if (grantResults.length > 0
                         && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     // Permission granted
                     startLocationUpdates();
                 } else {
                     // Permission denied
-                    permissionsDenied();
+                    UtilityMethods.permissionsDenied(LandingActivity.this);
                 }
                 break;
             }
         }
     }
 
-    // App cannot work without the permissions
-    private void permissionsDenied() {
-        Log.w(TAG, "permissionsDenied()");
-        Toast.makeText(this, "Permission Denied", Toast.LENGTH_SHORT).show();
-        finish();
-    }
-
+    /**
+     * Used to get location updates
+     * @param location Location Object
+     */
     public void onLocationChanged(Location location) {
-        // New location has now been determined
-        // You can now create a LatLng Object for use with maps
         writeActualLocation(location);
         LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
         markerLocation(latLng);
     }
 
+    /**
+     * Update lat long on UI and marker
+     * @param location Location Object
+     */
     private void writeActualLocation(Location location) {
         tvLat.setText(String.format("Lat: %s", location.getLatitude()));
         tvLong.setText(String.format("Long: %s", location.getLongitude()));
-
         markerLocation(new LatLng(location.getLatitude(), location.getLongitude()));
     }
 
+    /**
+     * Used to create marker for current location and set camera focus
+     * @param latLng current location
+     */
     private void markerLocation(LatLng latLng) {
         Log.i(TAG, "markerLocation(" + latLng + ")");
         String title = latLng.latitude + ", " + latLng.longitude;
@@ -258,6 +302,7 @@ public class LandingActivity extends Activity implements
      */
     private void initView() {
         tvLat = findViewById(R.id.lat);
+        tvEvent = findViewById(R.id.tv_event);
         tvLong = findViewById(R.id.lon);
         Button btnCreateGeofence = findViewById(R.id.btn_create_geofence);
         btnCreateGeofence.setOnClickListener(this);
@@ -312,7 +357,6 @@ public class LandingActivity extends Activity implements
     /**
      * Used to create GeoFence
      */
-    // Start Geofence creation process
     private void createGeofence() {
         Log.i(TAG, "createGeofence()");
         if (geoFenceMarker != null) {
@@ -324,7 +368,12 @@ public class LandingActivity extends Activity implements
         }
     }
 
-    // Create a Geofence
+    /**
+     * Create a Geofence
+     * @param latLng LatLong Object
+     * @param radius Radious of geofence
+     * @return GeoFence Object
+     */
     private Geofence createGeofence(LatLng latLng, float radius) {
         Log.d(TAG, "createGeofence");
         return new Geofence.Builder()
@@ -336,7 +385,11 @@ public class LandingActivity extends Activity implements
                 .build();
     }
 
-    // Create a Geofence Request
+    /**
+     * Create a Geofence Request
+     * @param geofence GeoFence Onbject
+     * @return GeoFencingRequest Object
+     */
     private GeofencingRequest createGeofenceRequest(Geofence geofence) {
         Log.d(TAG, "createGeofenceRequest");
         return new GeofencingRequest.Builder()
@@ -345,23 +398,27 @@ public class LandingActivity extends Activity implements
                 .build();
     }
 
+    /**
+     * createGeofencePendingIntent
+     * @return PendingIntent
+     */
     private PendingIntent createGeofencePendingIntent() {
         Log.d(TAG, "createGeofencePendingIntent");
-
-        if (geoFencePendingIntent != null) return geoFencePendingIntent;
-
         Intent intent = new Intent(this, GeofenceTransitionService.class);
         int GEOFENCE_REQ_CODE = 0;
         return PendingIntent.getService(
                 this, GEOFENCE_REQ_CODE, intent, PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
-    // Add the created GeofenceRequest to the device's monitoring list
+    /**
+     * Add the created GeofenceRequest to the device's monitoring list
+     * @param request GeofencingRequest
+     */
     private void addGeofence(GeofencingRequest request) {
         Log.d(TAG, "addGeofence");
 
-        if (checkLocationPermission()) {
-            requestPermissions(permissionsList);
+        if (UtilityMethods.checkLocationPermission(this)) {
+            UtilityMethods.requestPermissions(LandingActivity.this, permissionsList);
         } else {
             LocationServices.GeofencingApi.addGeofences(
                     googleApiClient,
@@ -389,6 +446,10 @@ public class LandingActivity extends Activity implements
         return false;
     }
 
+    /**
+     * Mareker creation for geofence
+     * @param latLng LatLng
+     */
     private void markerForGeofence(LatLng latLng) {
         Log.i(TAG, "markerForGeofence(" + latLng + ")");
         String title = latLng.latitude + ", " + latLng.longitude;
@@ -409,23 +470,11 @@ public class LandingActivity extends Activity implements
     public void onConnected(@Nullable Bundle bundle) {
         Log.i(TAG, "onConnected()");
         startLocationUpdates();
-        recoverGeofenceMarker();
     }
 
-    // Recovering last Geofence marker
-    private void recoverGeofenceMarker() {
-        Log.d(TAG, "recoverGeofenceMarker");
-        SharedPreferences sharedPref = getPreferences(Context.MODE_PRIVATE);
-
-        if (sharedPref.contains(KEY_GEOFENCE_LAT) && sharedPref.contains(KEY_GEOFENCE_LON)) {
-            double lat = Double.longBitsToDouble(sharedPref.getLong(KEY_GEOFENCE_LAT, -1));
-            double lon = Double.longBitsToDouble(sharedPref.getLong(KEY_GEOFENCE_LON, -1));
-            LatLng latLng = new LatLng(lat, lon);
-            markerForGeofence(latLng);
-            drawGeofence();
-        }
-    }
-
+    /**
+     * draw geofence
+     */
     private void drawGeofence() {
         Log.d(TAG, "drawGeofence()");
 
@@ -441,13 +490,11 @@ public class LandingActivity extends Activity implements
         geoFenceLimits = map.addCircle(circleOptions);
     }
 
-    // GoogleApiClient.ConnectionCallbacks suspended
     @Override
     public void onConnectionSuspended(int i) {
         Log.w(TAG, "onConnectionSuspended()");
     }
 
-    // GoogleApiClient.OnConnectionFailedListener fail
     @Override
     public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
         Log.w(TAG, "onConnectionFailed()");
@@ -464,13 +511,17 @@ public class LandingActivity extends Activity implements
         }
     }
 
-    // Saving GeoFence marker with prefs mng
+    /**
+     * Saving GeoFence marker with prefs mng
+     */
     private void saveGeofence() {
         Log.d(TAG, "saveGeofence()");
         SharedPreferences sharedPref = getPreferences(Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = sharedPref.edit();
 
+        String KEY_GEOFENCE_LAT = "GEOFENCE LATITUDE";
         editor.putLong(KEY_GEOFENCE_LAT, Double.doubleToRawLongBits(geoFenceMarker.getPosition().latitude));
+        String KEY_GEOFENCE_LON = "GEOFENCE LONGITUDE";
         editor.putLong(KEY_GEOFENCE_LON, Double.doubleToRawLongBits(geoFenceMarker.getPosition().longitude));
         editor.apply();
     }
