@@ -14,6 +14,10 @@ import static mobileprogramming.testassignment.utils.Constant.REQ_PERMISSION;
 
 public class UtilityMethods {
 
+    private UtilityMethods() {
+
+    }
+
     /**
      * Used to check Location Permission > 5.0
      *

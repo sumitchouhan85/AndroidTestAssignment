@@ -19,7 +19,6 @@ import mobileprogramming.testassignment.event.GeoFenceEvent;
 public class GeofenceTransitionService extends IntentService {
 
     private static final String TAG = GeofenceTransitionService.class.getSimpleName();
-    private int GEOFENCE_NOTIFICATION_ID = 0;
 
     public GeofenceTransitionService() {
         super(TAG);

@@ -75,7 +75,9 @@ public class LandingActivity extends Activity implements
     private static final String TAG = LandingActivity.class.getSimpleName();
     private static final String[] permissionsList = new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION};
 
-    private TextView tvLat, tvEvent, tvLong;
+    private TextView tvLat;
+    private TextView tvEvent;
+    private TextView tvLong;
     private GoogleMap map;
     private GoogleApiClient googleApiClient;
     private Marker geoFenceMarker;
@@ -225,17 +227,14 @@ public class LandingActivity extends Activity implements
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         Log.d(TAG, "onRequestPermissionsResult()");
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        switch (requestCode) {
-            case 999: {
-                if (grantResults.length > 0
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    // Permission granted
-                    startLocationUpdates();
-                } else {
-                    // Permission denied
-                    UtilityMethods.permissionsDenied(LandingActivity.this);
-                }
-                break;
+        if (requestCode == 999) {
+            if (grantResults.length > 0
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission granted
+                startLocationUpdates();
+            } else {
+                // Permission denied
+                UtilityMethods.permissionsDenied(LandingActivity.this);
             }
         }
     }
@@ -319,6 +318,7 @@ public class LandingActivity extends Activity implements
             case R.id.btn_clear_geofence:
                 clearGeofence();
                 break;
+            default:
         }
     }
 

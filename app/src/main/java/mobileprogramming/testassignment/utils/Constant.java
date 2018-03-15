@@ -9,4 +9,8 @@ public class Constant {
     public static long FASTEST_INTERVAL = 900;
     static int REQ_PERMISSION = 999;
 
+    private Constant() {
+
+    }
+
 }
